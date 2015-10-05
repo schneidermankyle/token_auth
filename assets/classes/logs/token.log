@@ -1,0 +1,2 @@
+ERROR: The following was encountered on Monday 5th of October 2015 02:52:58 PM Output: 201
+ Trace:  (error #0) file: C:\MAMP\htdocs\token_auth\assets\classes\tokenAuth.class.php line: 177 calling function: processError (error #1) file: C:\MAMP\htdocs\token_auth\assets\classes\tokenAuth.class.php line: 328 calling function: writeToDb (error #2) file: C:\MAMP\htdocs\token_auth\index.php line: 17 calling function: createRequest ;
