@@ -13,9 +13,9 @@ $connection = new connection($db);
 
 if ($connection->conn) {
 	$token = new tokenAuth();
-	$token->authType = 'cookie';
-
-	var_dump($token->createRequest());
+	echo($token->getToken() . '<br/>');
+	echo($token->sanitizeToken());
+	// $token->createRequest('session');
 	echo ('<br/>we are alive!');
 }
 

@@ -40,11 +40,13 @@ class tokenAuth
     public $authType = 'database';
     public $tableName = 'gs_requests';
     
-
+    private $db;
     private $currentToken = '';
     private $errors = array(
+        100 => 'Error, an invalid token was made available for authentication',
         200 => 'There was an error creating the db, if this problem continues to exist, please create manually.',
-        201 => 'There was an error writing request to database.'
+        201 => 'There was an error writing request to database.',
+        202 => 'Error, could not find database to connect to'
     );
 	
     // Prepare Log files
@@ -131,12 +133,24 @@ class tokenAuth
     // Private member Functions //
     private function writeToCookie($token = null) {
         if ($token) {
-
+            // This will rely on the page determining if cookies are enabled.
+            // For now we will just send an error identifieng that cookies are not enabled when request fails
+            setcookie('request', $this->currentToken, time()+$this->convertToSeconds($this->authTimeout));
         }
     }
 
-    private function setToSession($token) {
+    // FIX THIS! //
+    // Need to move along for now, come back to this and work on it... // 
+    private function writeToSession($token) {
+        if ($token) {
+            if (!session_status() === PHP_SESSION_ACTIVE) {
+                // we need to add the ability to test whether sessions are able to be started.
+                session_start();
+            } else {
 
+                echo ('session is active');
+            }
+        } 
     }
 
     // Converts a string such as 5m into seconds.
@@ -165,13 +179,13 @@ class tokenAuth
     }
 
     // Since the current option says to use database authentication, we must write to db
-    private function writeToDb($connection = null, $token = null) {
+    private function writeToDb($token = null) {
         // Make sure that the connection is set true.
-        if ($connection) {
+        if ($this->db) {
             // Would like to make this support various classes, but for now this will do.
-            $query = $connection->prepare('INSERT INTO `'.$this->tableName.'` (
+            $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
                 type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
-            $query->execute(array('type' => 'authentication', 'title' => 'Request', 'token' => $this->currentToken, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
+            $query->execute(array('type' => 'authentication', 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
             
             if ($query->rowCount() > 0) {
                 return TRUE;
@@ -210,12 +224,14 @@ class tokenAuth
         }
     }
 
-    private function sanitizeToken($token) {
+    public function sanitizeToken($token) {
         // need to verify that the token is the length defined in config
         // Also should make sure token is good to write to db.
-        if (isset($token) && $token && (strlen($token) === $this->length) &&       ) {
-
+        if (isset($token) && $token && (strlen($token) === $this->length) && preg_match("([A-Za-z\d\!\@\#\$\%\^\&\*\(\)]+)", $token, $outputArray)) {
+            return $outputArray[0];
         }
+
+        return FALSE;
     }
 
     private function returnString() {
@@ -278,6 +294,10 @@ class tokenAuth
         try {
             $query = $db->prepare('SELECT `id` FROM `'.$this->tableName.'`');
             $query->execute();
+
+            if ($query->rowCount() > 0) {
+                $this->db = $db;
+            }
         } catch (Exception $e) {
             if ( $e->getCode() === '42S02') {
                 return $this->createDb($db);
@@ -322,24 +342,52 @@ class tokenAuth
         return $this->currentToken;
     }
 
-    public function createRequest($medium = null, $token = null) {
+    public function createRequest($authType = null, $token = null) {
         // Look to the config and determine what kind of request this should be.
         // then we will have to set the request to the auth type
+        $authType = ($authType) ? $authType : $this->authType;
+        $token = ($token) ? $this->sanitizeToken($token) : $this->currentToken;
 
-        switch ($this->authType) {
+        switch ($authType) {
             case 'database':
-                if ($medium) {
+                if ($this->db) {
                     // Than let's go ahead and store to the database.
-                    return $this->writeToDb($medium, $token);
+                    return $this->writeToDb($token);
                 }
-                return 'we must store this to database';
+                return processError($this->errors[202]);
                 break;
-            case 'cooke':
+            case 'cookie':
                 $this->writeToCookie($token);
                 break;
             case 'session':
+                $this->writeToSession($token);
                 break;
             default:
+                return $this->processError(100);
+                break;
+        }
+    }
+
+    public function validateRequest($authType = null, $token = null) {
+        $authType = ($authType) ? $authType : $this->authType;
+        $token = ($token) ? $this->sanitizeToken($token) : $this->currentToken;
+
+        switch ($authType) {
+            case 'database':
+                if ($this->db) {
+                    // Than let's go ahead and store to the database.
+                    return $this->writeToDb($token);
+                }
+                return processError($this->errors[202]);
+                break;
+            case 'cookie':
+                $this->writeToCookie($token);
+                break;
+            case 'session':
+                $this->writeToSession($token);
+                break;
+            default:
+                return $this->processError(100);
                 break;
         }
     }
