@@ -13,9 +13,14 @@ $connection = new connection($db);
 
 if ($connection->conn) {
 	$token = new tokenAuth();
+	$token->initDb($connection->conn);
 	echo($token->getToken() . '<br/>');
-	echo($token->sanitizeToken());
-	// $token->createRequest('session');
+
+	$token->createRequest();
+	var_dump($token->validateRequest() );
+
+
+
 	echo ('<br/>we are alive!');
 }
 

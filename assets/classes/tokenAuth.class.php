@@ -44,6 +44,7 @@ class tokenAuth
     private $currentToken = '';
     private $errors = array(
         100 => 'Error, an invalid token was made available for authentication',
+        101 => 'Error, request not found',
         200 => 'There was an error creating the db, if this problem continues to exist, please create manually.',
         201 => 'There was an error writing request to database.',
         202 => 'Error, could not find database to connect to'
@@ -78,6 +79,7 @@ class tokenAuth
     private function processError($error = NULL, $dump = NULL) {
         // This function's sole purpose to figure out how to handle errors.
         // In the future,  I would like to expand on this and perhaps include more options like json
+        $error = $this->errors[$error];
         if (isset($error)) {
             // Echo or dump error directly to screen
             if (!$this->mode === 'development') {
@@ -147,8 +149,12 @@ class tokenAuth
                 // we need to add the ability to test whether sessions are able to be started.
                 session_start();
             } else {
-
-                echo ('session is active');
+                $_SESSION[] = array(
+                    'request' => 'request',
+                    'token' => $token,
+                    'date' => time(),
+                    'expiration' => time()+$this->convertToSeconds($this->authTimeout)
+                );
             }
         } 
     }
@@ -181,7 +187,7 @@ class tokenAuth
     // Since the current option says to use database authentication, we must write to db
     private function writeToDb($token = null) {
         // Make sure that the connection is set true.
-        if ($this->db) {
+        if ($this->db && $token) {
             // Would like to make this support various classes, but for now this will do.
             $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
                 type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
@@ -189,9 +195,23 @@ class tokenAuth
             
             if ($query->rowCount() > 0) {
                 return TRUE;
-            } else {
-                return $this->processError(201);
-            }
+            } return $this->processError(201);
+
+        } return $this->processError(100);
+    }
+
+    // Grab our passed in token from the database
+    private function getFromDb($token = null) {
+        // If there is an active connection and a valid token
+        if ($this->db && $token) {
+            $query = $this->db->prepare('SELECT * FROM `'.$this->tableName.'` WHERE `token` = :token');
+            $query->bindValue('token', $token);
+            $query->execute();
+            if ($query->rowCount() === 1) {
+                // We found a token, let's go ahead and return the request for processing
+                return $query->fetchAll(PDO::FETCH_ASSOC);
+                // Uh oh, no token found, return an error
+            } return $this->processError(101);
         }
     }
 
@@ -224,7 +244,7 @@ class tokenAuth
         }
     }
 
-    public function sanitizeToken($token) {
+    private function sanitizeToken($token) {
         // need to verify that the token is the length defined in config
         // Also should make sure token is good to write to db.
         if (isset($token) && $token && (strlen($token) === $this->length) && preg_match("([A-Za-z\d\!\@\#\$\%\^\&\*\(\)]+)", $token, $outputArray)) {
@@ -283,11 +303,13 @@ class tokenAuth
 
             return TRUE;
         } catch (Exception $e) {
-            return $this->processError($this->errors[200], $e);
+            return $this->processError(200, $e);
         }
     }
 
-    // PUBLICS //
+
+    /////////////////////////////////////
+    ////////////// PUBLICS //////////////
     public function initDb($db) {
         // For setting up db first time
         // Querry to see if table exists, if not set one up.
@@ -295,9 +317,8 @@ class tokenAuth
             $query = $db->prepare('SELECT `id` FROM `'.$this->tableName.'`');
             $query->execute();
 
-            if ($query->rowCount() > 0) {
-                $this->db = $db;
-            }
+            $this->db = $db;
+            return TRUE;
         } catch (Exception $e) {
             if ( $e->getCode() === '42S02') {
                 return $this->createDb($db);
@@ -354,7 +375,7 @@ class tokenAuth
                     // Than let's go ahead and store to the database.
                     return $this->writeToDb($token);
                 }
-                return processError($this->errors[202]);
+                return $this->processError(202);
                 break;
             case 'cookie':
                 $this->writeToCookie($token);
@@ -369,6 +390,14 @@ class tokenAuth
     }
 
     public function validateRequest($authType = null, $token = null) {
+        // validateRequest must do a few things here
+        // First it must grab the token from the authType
+        // Then it must sanitize passed in data
+        // It must then verify to make sure that the token matches in every way
+        // then it must verify that the request has not expired 
+        // Lastly, does the stored action match the requested action?
+        // Future option //
+        // Make sure the requester matches the stored user (this would need to rely on a passed in user value) //
         $authType = ($authType) ? $authType : $this->authType;
         $token = ($token) ? $this->sanitizeToken($token) : $this->currentToken;
 
@@ -376,9 +405,10 @@ class tokenAuth
             case 'database':
                 if ($this->db) {
                     // Than let's go ahead and store to the database.
-                    return $this->writeToDb($token);
+                    return $this->getFromDb($token);
+                    
                 }
-                return processError($this->errors[202]);
+                return $this->processError(202);
                 break;
             case 'cookie':
                 $this->writeToCookie($token);
