@@ -45,12 +45,28 @@ class tokenAuth
     private $errors = array(
         100 => 'Error, an invalid token was made available for authentication',
         101 => 'Error, request not found',
+        102 => 'Error, you are not authorized to do that action',
         200 => 'There was an error creating the db, if this problem continues to exist, please create manually.',
         201 => 'There was an error writing request to database.',
-        202 => 'Error, could not find database to connect to'
+        202 => 'Error, could not find database to connect to',
+        203 => 'There was an error parsing request',
+        204 => 'There was an error removing the request',
+        205 => 'Auth Type not defined'
     );
 	
-    // Prepare Log files
+    function __construct($token = null)
+    {
+        if ($this->logging === TRUE) {
+            $this->prepareLogs();
+        }
+
+        $this->currentToken = ($token) ? $token : $this->createToken();
+    }
+
+    ////////////////////////////////
+    // Logging and error handling //
+    ////////////////////////////////
+
     private function prepareLogs() {
         // First we need to determine if we should log
         if ($this->logging) {
@@ -123,21 +139,41 @@ class tokenAuth
         return FALSE;
     }
 
-	function __construct($token = null)
-	{
-        if ($this->logging === TRUE) {
-            $this->prepareLogs();
+    //////////////////////////////
+    ///////// Databasing /////////
+    //////////////////////////////
+    
+    // Try to actually create the db //
+    private function createDb($db) {
+        try {
+            $db->exec("CREATE TABLE IF NOT EXISTS `".$this->tableName."` (
+                `id` INT NOT NULL AUTO_INCREMENT,
+                `type` VARCHAR(45) NOT NULL,
+                `title` VARCHAR(128) NOT NULL,
+                `token` VARCHAR(1024) NOT NULL,
+                `date` INT(64) NOT NULL,
+                `expiration` int(64) NOT NULL,
+                `status` INT(3) NOT NULL,
+                PRIMARY KEY (`id`));"
+            );
+
+            return TRUE;
+        } catch (Exception $e) {
+            return $this->processError(200, $e);
         }
+    }
 
-        $this->currentToken = ($token) ? $token : $this->createToken();
-	}
+    //////////////////////////////
+    ////// Request handling //////
+    //////////////////////////////
 
-    // Private member Functions //
+    // Need to make cookies and sessions able to handle multiple requests
+    // Write request to cookie
     private function writeToCookie($token = null) {
         if ($token) {
             // This will rely on the page determining if cookies are enabled.
             // For now we will just send an error identifieng that cookies are not enabled when request fails
-            setcookie('request', $this->currentToken, time()+$this->convertToSeconds($this->authTimeout));
+            setcookie('authentication', $this->currentToken, time()+$this->convertToSeconds($this->authTimeout));
         }
     }
 
@@ -145,19 +181,140 @@ class tokenAuth
     // Need to move along for now, come back to this and work on it... // 
     private function writeToSession($token) {
         if ($token) {
-            if (!session_status() === PHP_SESSION_ACTIVE) {
+            if (session_status() !== PHP_SESSION_ACTIVE) {
                 // we need to add the ability to test whether sessions are able to be started.
                 session_start();
             } else {
+                // Set the reequest into the active session
                 $_SESSION[] = array(
-                    'request' => 'request',
+                    'type' => 'authentication',
                     'token' => $token,
                     'date' => time(),
-                    'expiration' => time()+$this->convertToSeconds($this->authTimeout)
+                    'expiration' => time()+$this->convertToSeconds($this->authTimeout),
+                    'status' => 1
                 );
             }
         } 
     }
+
+    // Since the current option says to use database authentication, we must write to db
+    private function writeToDb($token = null) {
+        // Make sure that the connection is set true.
+        if ($this->db && $token) {
+            // Would like to make this support various classes, but for now this will do.
+            $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
+                type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
+            $query->execute(array('type' => 'authentication', 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
+            
+            if ($query->rowCount() > 0) {
+                return TRUE;
+            } return $this->processError(201);
+
+        } return $this->processError(100);
+    }
+
+    // Quickly update the status of 
+    private function removeFromDb($token) {
+        if ($this->db && $token) {
+            $query = $this->db->prepare('UPDATE `'.$this->tableName.'` SET status = 0 WHERE `token` = :token');
+            $query->bindValue('token', $token);
+            $query->execute();
+
+            if ($query->rowCount() === 1) {
+                return TRUE;
+            }   return $this->processError(204);
+        } $this->processError(204);
+    }
+
+    // Remove cookie authentication
+    private function removeCookie() {
+        if (isset($token) && isset($_COOKIE['authentication'])) {
+            setcookie('authentication', '', time()-3600);
+            unset($_COOKIE['authentication']);
+            return TRUE;
+        } return $this->processError(204);
+    }
+
+    private function removeFromSession() {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        } else {
+            if ($_SESSION['type']) {
+                unset($_SESSION['type']);
+                unset($_SESSION['token']);
+                unset($_SESSION['date']);
+                unset($_SESSION['expiration']);
+                unset($_SESSION['status']);
+                return TRUE;
+            } return $this->processError(204);
+        }
+    }
+
+
+    private function completeRequest($token, $authType) {
+        if (isset($token) && isset($authType)) {
+            switch ($authType) {
+                case 'database':
+                    return $this->removeFromDb($token);
+                    break;
+                case 'cookie':
+                        return $this->removeCookie();
+                    break;
+                case 'session':
+                    return $this->removeFromSession();
+                    break;
+                default:
+                    return $this->processError(205);
+                    break;
+            }
+        }
+    }
+
+    // Grab our passed in token from the database
+    private function getFromDb($token = null) {
+        // If there is an active connection and a valid token
+        if ($this->db && $token) {
+            $query = $this->db->prepare('SELECT * FROM `'.$this->tableName.'` WHERE `token` = :token');
+            $query->bindValue('token', $token);
+            $query->execute();
+            if ($query->rowCount() === 1) {
+                // We found a token, let's go ahead and return the request for processing
+                return $query->fetchAll(PDO::FETCH_ASSOC);
+                // Uh oh, no token found, return an error
+            } return $this->processError(101);
+        }
+    }
+
+    // This will solely be called from validateRequest
+    // This function is simply to sort through a given array and determine if the request is valid
+    private function processRequest($request, $token, $authType) {
+        // Then it must sanitize passed in data
+        // It must then verify to make sure that the token matches in every way
+        if (isset($request) && is_array($request)) {
+            // Let's ensure that these match and that the request has not expired
+            if ($token === $this->sanitizeToken($request['token']) && time() < intval($request['expiration']) && intval($request['status']) === 1)) {
+                // Lastly, does the stored action match the requested action?
+                if ($request['type'] === 'authentication') {
+                    // Update status and return true.
+                    $this->completeRequest($token, $authType);
+                    return TRUE;
+                    // If anything went wront, process the errors
+                } return $this->processError(102);
+            } return $this->processError(100)
+        } return $this->processError(203);
+    }
+
+    private function verifySetting($setting, $value) {
+        // This function will ensure that the settings being imported with 
+        // loadConfig jive with what the system expects.
+        // !!!!!!!!! FIX THIS !!!!!!! //
+        // For now this is just going to loop back.
+        return $value;
+    }
+
+    ///////////////////////////
+    //////// Utilities ////////
+    ///////////////////////////
 
     // Converts a string such as 5m into seconds.
     private function convertToSeconds($time) {
@@ -182,45 +339,6 @@ class tokenAuth
         }
 
         return ($int * $multiplyer);
-    }
-
-    // Since the current option says to use database authentication, we must write to db
-    private function writeToDb($token = null) {
-        // Make sure that the connection is set true.
-        if ($this->db && $token) {
-            // Would like to make this support various classes, but for now this will do.
-            $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
-                type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
-            $query->execute(array('type' => 'authentication', 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
-            
-            if ($query->rowCount() > 0) {
-                return TRUE;
-            } return $this->processError(201);
-
-        } return $this->processError(100);
-    }
-
-    // Grab our passed in token from the database
-    private function getFromDb($token = null) {
-        // If there is an active connection and a valid token
-        if ($this->db && $token) {
-            $query = $this->db->prepare('SELECT * FROM `'.$this->tableName.'` WHERE `token` = :token');
-            $query->bindValue('token', $token);
-            $query->execute();
-            if ($query->rowCount() === 1) {
-                // We found a token, let's go ahead and return the request for processing
-                return $query->fetchAll(PDO::FETCH_ASSOC);
-                // Uh oh, no token found, return an error
-            } return $this->processError(101);
-        }
-    }
-
-    private function verifySetting($setting, $value) {
-        // This function will ensure that the settings being imported with 
-        // loadConfig jive with what the system expects.
-        // !!!!!!!!! FIX THIS !!!!!!! //
-        // For now this is just going to loop back.
-        return $value;
     }
 
     private function randomNumber($min, $max) {
@@ -287,29 +405,11 @@ class tokenAuth
         return $string;
     }
 
-    // Try to actually create the db //
-    private function createDb($db) {
-        try {
-            $db->exec("CREATE TABLE IF NOT EXISTS `".$this->tableName."` (
-                `id` INT NOT NULL AUTO_INCREMENT,
-                `type` VARCHAR(45) NOT NULL,
-                `title` VARCHAR(128) NOT NULL,
-                `token` VARCHAR(1024) NOT NULL,
-                `date` INT(64) NOT NULL,
-                `expiration` int(64) NOT NULL,
-                `status` INT(3) NOT NULL,
-                PRIMARY KEY (`id`));"
-            );
-
-            return TRUE;
-        } catch (Exception $e) {
-            return $this->processError(200, $e);
-        }
-    }
-
 
     /////////////////////////////////////
     ////////////// PUBLICS //////////////
+    /////////////////////////////////////
+
     public function initDb($db) {
         // For setting up db first time
         // Querry to see if table exists, if not set one up.
@@ -326,6 +426,9 @@ class tokenAuth
         }
     }
 
+    // creates token per configuration and stores token to member variable
+    // Will accept override to prevent storing token to object.
+    // Instead this is allow class to work as simple token generator.
     public function createToken($override = FALSE) {
         $token = '';
         // Set our current list of acceptable characters for the token
@@ -340,6 +443,11 @@ class tokenAuth
             $this->currentToken = $token;
         }
         return $token;
+    }
+
+    // Quick getter for current token //
+    public function getToken() {
+        return $this->currentToken;
     }
 
     // In case defaults are not preferred, this allows dev to import configs in one array
@@ -359,10 +467,8 @@ class tokenAuth
         return FALSE;
     }
 
-    public function getToken() {
-        return $this->currentToken;
-    }
-
+    // Create an authentication request per authType member variable
+    // depending on what kind of authentication is requested, class will handle setting the request
     public function createRequest($authType = null, $token = null) {
         // Look to the config and determine what kind of request this should be.
         // then we will have to set the request to the auth type
@@ -384,20 +490,18 @@ class tokenAuth
                 $this->writeToSession($token);
                 break;
             default:
-                return $this->processError(100);
+                return $this->processError(205);
                 break;
         }
     }
 
+
+
+    // Given the current authType and token, validate the request.
     public function validateRequest($authType = null, $token = null) {
         // validateRequest must do a few things here
         // First it must grab the token from the authType
-        // Then it must sanitize passed in data
-        // It must then verify to make sure that the token matches in every way
-        // then it must verify that the request has not expired 
-        // Lastly, does the stored action match the requested action?
-        // Future option //
-        // Make sure the requester matches the stored user (this would need to rely on a passed in user value) //
+        // Then pass it off to be processed.
         $authType = ($authType) ? $authType : $this->authType;
         $token = ($token) ? $this->sanitizeToken($token) : $this->currentToken;
 
@@ -405,7 +509,7 @@ class tokenAuth
             case 'database':
                 if ($this->db) {
                     // Than let's go ahead and store to the database.
-                    return $this->getFromDb($token);
+                    return $this->processRequest($this->getFromDb($token), $token, 'database');
                     
                 }
                 return $this->processError(202);
@@ -417,10 +521,14 @@ class tokenAuth
                 $this->writeToSession($token);
                 break;
             default:
-                return $this->processError(100);
+                return $this->processError(205);
                 break;
         }
     }
+
+    /////////////////////////////////////
+    /////////////// Other ///////////////
+    /////////////////////////////////////
 
     public function debug() {
         $test = 'authType';
