@@ -271,7 +271,7 @@ class tokenAuth
     }
 
     // Grab our passed in token from the database
-    private function getFromDb($token = null) {
+    private function getFromDb($token) {
         // If there is an active connection and a valid token
         if ($this->db && $token) {
             $query = $this->db->prepare('SELECT * FROM `'.$this->tableName.'` WHERE `token` = :token');
@@ -283,6 +283,10 @@ class tokenAuth
                 // Uh oh, no token found, return an error
             } return $this->processError(101);
         }
+    }
+
+    private function getFromCookie($token) {
+
     }
 
     // This will solely be called from validateRequest
