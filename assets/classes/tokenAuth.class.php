@@ -21,7 +21,7 @@
     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
     LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
     OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS I NTHE SOFTWARE.
 */
 
 
@@ -29,17 +29,17 @@ class tokenAuth
 {
     // Configuration variables, can either be set inside app or set with array
     // using the importConfig($array) command;
-    public $logging = TRUE;
-    public $mode = 'development';
-    public $logFile = __DIR__;
-    public $length = 128;
-    public $authTimeout = '5m';
-    public $hash = FALSE;
-    public $hashType = 'sha512';
-    public $tokenFlags = 'A';
-    public $authType = 'database';
-    public $tableName = 'gs_requests';
-    
+    private $logging = TRUE;
+    private $mode = 'development';
+    private $logFile = __DIR__;
+    private $length = 128;
+    private $authTimeout = '5m';
+    private $hash = FALSE;
+    private $hashType = 'sha512';
+    private $tokenFlags = 'A';
+    private $authType = 'database';
+    private $tableName = 'gs_requests';
+    private $action = 'request';
     private $db;
     private $currentToken = '';
     private $errors = array(
@@ -204,7 +204,7 @@ class tokenAuth
             // Would like to make this support various classes, but for now this will do.
             $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
                 type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
-            $query->execute(array('type' => 'authentication', 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
+            $query->execute(array('type' => $this->action, 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
             
             if ($query->rowCount() > 0) {
                 return TRUE;
@@ -258,7 +258,7 @@ class tokenAuth
                     return $this->removeFromDb($token);
                     break;
                 case 'cookie':
-                        return $this->removeCookie();
+                    return $this->removeCookie();
                     break;
                 case 'session':
                     return $this->removeFromSession();
@@ -279,14 +279,16 @@ class tokenAuth
             $query->execute();
             if ($query->rowCount() === 1) {
                 // We found a token, let's go ahead and return the request for processing
-                return $query->fetchAll(PDO::FETCH_ASSOC);
+                return $query->fetch(PDO::FETCH_ASSOC);
                 // Uh oh, no token found, return an error
             } return $this->processError(101);
         }
     }
 
     private function getFromCookie($token) {
-
+        if ($this->$token) {
+            echo ('setting found');
+        }
     }
 
     // This will solely be called from validateRequest
@@ -296,15 +298,15 @@ class tokenAuth
         // It must then verify to make sure that the token matches in every way
         if (isset($request) && is_array($request)) {
             // Let's ensure that these match and that the request has not expired
-            if ($token === $this->sanitizeToken($request['token']) && time() < intval($request['expiration']) && intval($request['status']) === 1)) {
+            if ($token === $this->sanitizeToken($request['token']) && time() < intval($request['expiration']) && intval($request['status']) === 1) {
                 // Lastly, does the stored action match the requested action?
-                if ($request['type'] === 'authentication') {
+                if ($request['type'] === $this->action) {
                     // Update status and return true.
                     $this->completeRequest($token, $authType);
                     return TRUE;
                     // If anything went wront, process the errors
                 } return $this->processError(102);
-            } return $this->processError(100)
+            } return $this->processError(100);
         } return $this->processError(203);
     }
 
@@ -374,6 +376,49 @@ class tokenAuth
         }
 
         return FALSE;
+    }
+
+    private function sanitize($input){
+        $output;
+
+        if (is_array($input)) {
+            foreach($input as $key=>$value) {
+                $output[$key] = $this->sanitize($value);
+            }
+        } else {
+            if (get_magic_quotes_gpc()) {
+                $input = stripslashes($input);
+            }
+            $input = $this->cleanString($input);
+            $output = $this->escapeString($input);
+        }
+
+        return $output;
+    }
+
+   private function cleanString($input){
+        $search = array(
+            '@<script[^>]*?>.*?</script>@si',   // Strip out javascript
+            '@<[\/\!]*?[^<>]*?>@si',            // Strip out HTML tags
+            '@<style[^>]*?>.*?</style>@siU',    // Strip style tags properly
+            '@<![\s\S]*?--[ \t\n\r]*>@',        // Strip multi-line comments
+            '/((\.)+(\/)+)+/',                  // For directory matching
+            '/(\/)+/'                           // Get rid of slashes
+        );
+
+        $output = preg_replace($search, '', $input);
+        return $output;
+    }
+
+    private function escapeString($input) { 
+        if(is_array($input)) 
+            return array_map(__METHOD__, $input); 
+
+        if(!empty($input) && is_string($input)) { 
+            return str_replace(array('\\', "\0", "\n", "\r", "'", '"', "\x1a"), array('\\\\', '\\0', '\\n', '\\r', "\\'", '\\"', '\\Z'), $input); 
+        } 
+
+        return $input; 
     }
 
     private function returnString() {
@@ -470,6 +515,22 @@ class tokenAuth
 
         return FALSE;
     }
+
+    // Santize the option, even though we will re-sanitize strings before uploading
+    public function setOption($member, $key = FALSE) {
+        if ($member && $this->$member) {
+            // Is this section really needed? //
+            if ($key) {
+                $this->$member = $this->verifySetting($member, $this->sanitize($key));
+                return TRUE;
+            } 
+            // Either the actual value of false or null was passed in, or some sort of issue
+            $this->$member = $this->verifySetting($this->$member,FALSE);
+            return FALSE;
+
+        } return FALSE;
+    }
+
 
     // Create an authentication request per authType member variable
     // depending on what kind of authentication is requested, class will handle setting the request
