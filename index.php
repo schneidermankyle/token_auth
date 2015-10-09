@@ -16,12 +16,15 @@ if ($connection->conn) {
 	$token->initDb($connection->conn);
 	echo($token->getToken() . '<br/>');
     
-    $token->setOption('action', 'update');
-    $token->createRequest();
-  
-	var_dump($token->validateRequest() );
+    $token->setOption('authType', 'database');
+    $token->setOption('action', 'writeToDatabase');
     
-
+    $token->debug('action');
+    
+//    $token->createRequest();
+  
+//	var_dump($token->validateRequest() );
+    
 	echo ('<br/>we are alive!');
 }
 

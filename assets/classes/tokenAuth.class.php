@@ -46,6 +46,8 @@ class tokenAuth
         100 => 'Error, an invalid token was made available for authentication',
         101 => 'Error, request not found',
         102 => 'Error, you are not authorized to do that action',
+        103 => 'Error, could not access session',
+        104 => 'Error, could not access cookies',
         200 => 'There was an error creating the db, if this problem continues to exist, please create manually.',
         201 => 'There was an error writing request to database.',
         202 => 'Error, could not find database to connect to',
@@ -173,7 +175,7 @@ class tokenAuth
         if ($token) {
             // This will rely on the page determining if cookies are enabled.
             // For now we will just send an error identifieng that cookies are not enabled when request fails
-            setcookie('authentication', $this->currentToken, time()+$this->convertToSeconds($this->authTimeout));
+            setcookie($this->currentToken, $this->sanitize($this->action), time()+$this->convertToSeconds($this->authTimeout));
         }
     }
 
@@ -184,16 +186,16 @@ class tokenAuth
             if (session_status() !== PHP_SESSION_ACTIVE) {
                 // we need to add the ability to test whether sessions are able to be started.
                 session_start();
-            } else {
-                // Set the reequest into the active session
-                $_SESSION[] = array(
-                    'type' => 'authentication',
-                    'token' => $token,
-                    'date' => time(),
-                    'expiration' => time()+$this->convertToSeconds($this->authTimeout),
-                    'status' => 1
-                );
             }
+
+            // Set the reequest into the active session
+            $_SESSION[$token] = array(
+                'type' => $this->sanitize($this->action),
+                'token' => $token,
+                'date' => time(),
+                'expiration' => time()+$this->convertToSeconds($this->authTimeout),
+                'status' => 1
+            );
         } 
     }
 
@@ -227,27 +229,24 @@ class tokenAuth
     }
 
     // Remove cookie authentication
-    private function removeCookie() {
-        if (isset($token) && isset($_COOKIE['authentication'])) {
-            setcookie('authentication', '', time()-3600);
-            unset($_COOKIE['authentication']);
+    private function removeCookie($token) {
+        if (isset($token) && isset($_COOKIE[$token])) {
+            setcookie($token, '', time()-3600);
+            unset($_COOKIE[$token]);
             return TRUE;
         } return $this->processError(204);
     }
 
-    private function removeFromSession() {
+    private function removeFromSession($token) {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
-        } else {
-            if ($_SESSION['type']) {
-                unset($_SESSION['type']);
-                unset($_SESSION['token']);
-                unset($_SESSION['date']);
-                unset($_SESSION['expiration']);
-                unset($_SESSION['status']);
-                return TRUE;
-            } return $this->processError(204);
-        }
+        } 
+
+        if ($token && isset($_SESSION[$token])) {
+            unset($_SESSION[$token]);
+            return TRUE;
+        } return $this->processError(204);
+        
     }
 
 
@@ -258,10 +257,10 @@ class tokenAuth
                     return $this->removeFromDb($token);
                     break;
                 case 'cookie':
-                    return $this->removeCookie();
+                    return $this->removeCookie($token);
                     break;
                 case 'session':
-                    return $this->removeFromSession();
+                    return $this->removeFromSession($token);
                     break;
                 default:
                     return $this->processError(205);
@@ -285,10 +284,35 @@ class tokenAuth
         }
     }
 
+    // This is sort of going to be hack and slash for the moment.
+    // Process request expects certain values most of which 
+    // are verified simply by the existance of a cookie.
     private function getFromCookie($token) {
-        if ($this->$token) {
-            echo ('setting found');
+        if ($token && isset($_COOKIE[$token])) {
+
+            return array(
+                'token' => $token,
+                'expiration' => time() + 300,
+                'status' => 1,
+                'type' => $this->sanitize($_COOKIE[$token])
+            );
+        } return $this->processError(104);
+    }
+
+    // While returning 
+    private function getFromSession($token) {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
         }
+
+        if ($token && isset($_SESSION[$token])) {
+            return array(
+                'token' => $this->sanitizeToken($_SESSION[$token]['token']),
+                'expiration' => $this->sanitize($_SESSION[$token]['expiration']),
+                'status' => $this->sanitize($_SESSION[$token]['status']),
+                'type' => $this->sanitize($_SESSION[$token]['type'])
+            );
+        } return $this->processError(103);
     }
 
     // This will solely be called from validateRequest
@@ -315,6 +339,8 @@ class tokenAuth
         // loadConfig jive with what the system expects.
         // !!!!!!!!! FIX THIS !!!!!!! //
         // For now this is just going to loop back.
+
+        
         return $value;
     }
 
@@ -580,10 +606,10 @@ class tokenAuth
                 return $this->processError(202);
                 break;
             case 'cookie':
-                $this->writeToCookie($token);
+                return $this->processRequest($this->getFromCookie($token), $token, 'cookie');
                 break;
             case 'session':
-                $this->writeToSession($token);
+                return $this->processRequest($this->getFromSession($token), $token, 'session');
                 break;
             default:
                 return $this->processError(205);
@@ -595,10 +621,9 @@ class tokenAuth
     /////////////// Other ///////////////
     /////////////////////////////////////
 
-    public function debug() {
-        $test = 'authType';
-        echo('debuging <br/>');
-        var_dump($this->$test);
+    public function debug($option) {
+        echo('<br/>debuging <br/>');
+        echo(($this->$option) ? (string)$option.' = '.$this->$option.'<br/>' : 'Error option not found <br/>');
     }
 
 }
