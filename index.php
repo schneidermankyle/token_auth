@@ -16,10 +16,11 @@ if ($connection->conn) {
 	$token->initDb($connection->conn);
 	echo($token->getToken() . '<br/>');
     
-    $token->setOption('authType', 'database');
-    $token->setOption('action', 'writeToDatabase');
+    $token->setOption('logging', TRUE);
     
-    $token->debug('action');
+    $token->debug('logging');
+
+    
     
 //    $token->createRequest();
   

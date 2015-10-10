@@ -250,6 +250,8 @@ class tokenAuth
     }
 
 
+    // Since request is verified, must finish request
+    // In order to do this, we will set request status to 0 or delete request all together.
     private function completeRequest($token, $authType) {
         if (isset($token) && isset($authType)) {
             switch ($authType) {
@@ -334,14 +336,9 @@ class tokenAuth
         } return $this->processError(203);
     }
 
+    // Settings set through setOption will be filtered through here to verify 
     private function verifySetting($setting, $value) {
-        // This function will ensure that the settings being imported with 
-        // loadConfig jive with what the system expects.
-        // !!!!!!!!! FIX THIS !!!!!!! //
-        // For now this is just going to loop back.
-
-        
-        return $value;
+        return $value;       
     }
 
     ///////////////////////////
@@ -623,7 +620,7 @@ class tokenAuth
 
     public function debug($option) {
         echo('<br/>debuging <br/>');
-        echo(($this->$option) ? (string)$option.' = '.$this->$option.'<br/>' : 'Error option not found <br/>');
+        var_dump( ($this->$option) ? (string)$option.' = '.$this->$option.'<br/>' : 'Error option not found <br/>');
     }
 
 }
