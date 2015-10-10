@@ -1,10 +1,10 @@
 <?php
-require './assets/classes/connection.class.php';
+require './assets/classes/demoAssets/connection.class.php';
 require './assets/classes/tokenAuth.class.php';
 
 $db = array(
 	'host' => 'localhost',
-	'dbname' => 'golden_admin',
+	'dbname' => 'admin_test',
 	'username' => 'root',
 	'password' => 'root'
 );
@@ -20,8 +20,6 @@ if ($connection->conn) {
     
     $token->debug('logging');
 
-    
-    
 //    $token->createRequest();
   
 //	var_dump($token->validateRequest() );

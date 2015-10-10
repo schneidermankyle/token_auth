@@ -30,15 +30,15 @@ class tokenAuth
     // Configuration variables, can either be set inside app or set with array
     // using the importConfig($array) command;
     private $logging = TRUE;
-    private $mode = 'development';
+    private $mode = 'production';
     private $logFile = __DIR__;
     private $length = 128;
-    private $authTimeout = '5m';
+    private $authTimeout = '15m';
     private $hash = FALSE;
     private $hashType = 'sha512';
     private $tokenFlags = 'A';
     private $authType = 'database';
-    private $tableName = 'gs_requests';
+    private $tableName = 'token_auth';
     private $action = 'request';
     private $db;
     private $currentToken = '';
@@ -62,7 +62,7 @@ class tokenAuth
             $this->prepareLogs();
         }
 
-        $this->currentToken = ($token) ? $token : $this->createToken();
+        $this->currentToken = ($token) ? $this->sanitizeToken($token) : $this->createToken();
     }
 
     ////////////////////////////////
@@ -151,7 +151,6 @@ class tokenAuth
             $db->exec("CREATE TABLE IF NOT EXISTS `".$this->tableName."` (
                 `id` INT NOT NULL AUTO_INCREMENT,
                 `type` VARCHAR(45) NOT NULL,
-                `title` VARCHAR(128) NOT NULL,
                 `token` VARCHAR(1024) NOT NULL,
                 `date` INT(64) NOT NULL,
                 `expiration` int(64) NOT NULL,
@@ -205,8 +204,8 @@ class tokenAuth
         if ($this->db && $token) {
             // Would like to make this support various classes, but for now this will do.
             $query = $this->db->prepare('INSERT INTO `'.$this->tableName.'` (
-                type, title, token, date, expiration, status) Values(:type, :title, :token, :date, :expiration, :status);');
-            $query->execute(array('type' => $this->action, 'title' => 'Request', 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
+                type, token, date, expiration, status) Values(:type, :token, :date, :expiration, :status);');
+            $query->execute(array('type' => $this->action, 'token' => $token, 'date' => time(), 'expiration' => (time() + $this->convertToSeconds($this->authTimeout)), 'status' => 1));
             
             if ($query->rowCount() > 0) {
                 return TRUE;
@@ -351,6 +350,15 @@ class tokenAuth
         $multiplyer = substr($time, -1);
 
         switch ($multiplyer) {
+            case 'y':
+                $multiplyer = 30412800;
+                break;
+            case 'M':
+                $multiplyer = 2534397;
+                break;
+            case 'w':
+                $multiplyer = 604800;
+                break;
             case 'd':
                 $multiplyer = 86400;
                 break;
