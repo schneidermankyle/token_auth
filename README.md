@@ -56,8 +56,8 @@ $token->loadConfig($configArray);
 Depending on your needs, you may want to log the output of both configuration errors along with when invalid tokens are attempted to be authenticated.
 
 ####Options:
--	True (Default)
--	False
+- True (Default)
+- False
 
 #####Example:
 ```
@@ -68,9 +68,9 @@ $token->setOption(‘logging’,TRUE);
 The current set mode determines whether as well as in the future which level of errors will be rendered to the screen. Currently development mode will render all errors and production will render none. Future plans are to support multiple levels based on the severity of the error.
 
 ####Options:
--	‘production’ (default)
--	‘development’
--	
+- ‘production’ (default)
+- ‘development’
+	
 #####Example:
 ```
 $token->setOption(‘mode’,’development);
@@ -148,17 +148,18 @@ $token->setOption(‘authType’,’cookies’);
 Action refers to the action being authorized. This can be any string, though I recommend choosing something simple like ‘update’ or ‘removeAlert’. Note - This value is verified when token validation is executed and by default, if using database authentication and the auto db installer supports strings up to 45 characters. If this option is not set it will default to the string ‘request’ and can be ignored if your only concern is making sure the token was passed successfully.
 
 ####Options:
--	Any string (default is ‘request’)
+- Any string (default is ‘request’)
 
 #####Example:
 ```
 $token->setOption(‘action’,’updateUsers’);
 ```
 
-###tableName (Optional): This option refers to the name of the table where you would like data stored when using database authentication. This can be any string that you would like or that works with your database naming conventions
+###tableName (Optional):
+This option refers to the name of the table where you would like data stored when using database authentication. This can be any string that you would like or that works with your database naming conventions
 
 ####Options:
--	Any string that follows your table naming conventions (Default is ‘token_auth’)
+- Any string that follows your table naming conventions (Default is ‘token_auth’)
 
 #####Example:
 ```
