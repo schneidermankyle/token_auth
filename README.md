@@ -52,7 +52,8 @@ $token->loadConfig($configArray);
 
 ##Options:
 
-###logging: Depending on your needs, you may want to log the output of both configuration errors along with when invalid tokens are attempted to be authenticated.
+###logging:
+Depending on your needs, you may want to log the output of both configuration errors along with when invalid tokens are attempted to be authenticated.
 
 ####Options:
 -	True (Default)
@@ -63,7 +64,8 @@ $token->loadConfig($configArray);
 $token->setOption(‘logging’,TRUE);
 ```
 
-### mode: The current set mode determines whether as well as in the future which level of errors will be rendered to the screen. Currently development mode will render all errors and production will render none. Future plans are to support multiple levels based on the severity of the error.
+### mode:
+The current set mode determines whether as well as in the future which level of errors will be rendered to the screen. Currently development mode will render all errors and production will render none. Future plans are to support multiple levels based on the severity of the error.
 
 ####Options:
 -	‘production’ (default)
@@ -74,7 +76,8 @@ $token->setOption(‘logging’,TRUE);
 $token->setOption(‘mode’,’development);
 ```
 
-###logFile: Depending on various factors you may want to move the directory of where errors are logged to. Currently default is the directory where the class is stored on the server as denoted by __DIR__.
+###logFile:
+Depending on various factors you may want to move the directory of where errors are logged to. Currently default is the directory where the class is stored on the server as denoted by __DIR__.
 
 ####Options:
 -	Any writeable path (default is __DIR__)
@@ -84,7 +87,8 @@ $token->setOption(‘mode’,’development);
 $token->setOption(‘logFile’,’../somedirectory’);
 ```
 
-###length: You may want to change the token length, this is done simply altering the length property. You can change this property to theoretically any number supported by your authentication method. ######Note – If you are using database authentication and you use the automatic database initialization of this class, then tokens can be up to 1024 characters in length.
+###length:
+You may want to change the token length, this is done simply altering the length property. You can change this property to theoretically any number supported by your authentication method. Note – If you are using database authentication and you use the automatic database initialization of this class, then tokens can be up to 1024 characters in length.
 
 ####Options:
 -	Any integer supported by your chosen authentication method (default is 128)
@@ -94,7 +98,8 @@ $token->setOption(‘logFile’,’../somedirectory’);
 $token->setOption(‘length’,256);
 ```
 
-###authTimeout: This option refers to how long until the authentication method will time out. Definition for this option is defined as ‘(integer)(measurement)’ So fifteen minutes would be passed in as ‘5m’, or perhaps one week as ‘1w’. ######Default for this option is ‘15m’
+###authTimeout:
+This option refers to how long until the authentication method will time out. Definition for this option is defined as ‘(integer)(measurement)’ So fifteen minutes would be passed in as ‘5m’, or perhaps one week as ‘1w’. Default for this option is ‘15m’
 
 ####Options:
 -	‘s’ : seconds
@@ -110,7 +115,8 @@ $token->setOption(‘length’,256);
 $token->setOption(‘authTimeout’,’20h’);
 ```
 
-###tokenFlags: tokenFlags refers to the characters you wish to include in your token. Default is all the letters of the English alphabet: [a-zA-Z], Digits: [0-9] and special characters [!@#$%^&*()]. Flags are passed in as a compiled string such as: ‘Wds’ which would include [A-Z0-9\s]. ######Note - \s denotes whitespace.
+###tokenFlags:
+tokenFlags refers to the characters you wish to include in your token. Default is all the letters of the English alphabet: [a-zA-Z], Digits: [0-9] and special characters [!@#$%^&*()]. Flags are passed in as a compiled string such as: ‘Wds’ which would include [A-Z0-9\s]. Note - \s denotes whitespace.
 
 ####Options:
 -	‘A’ : All excluding whitespace
@@ -125,7 +131,8 @@ $token->setOption(‘authTimeout’,’20h’);
 $token->setOption(‘tokenFlags’,’wWds’);
 ```
 
-###authType: This option refers to the method of authentication you would like to use. Right now only three are supported, with the recommended being database. ######Note – In order for database authentication to work, a PDO connection must be supplied into the initDb function, this will support MySQLi in the near future.
+###authType:
+This option refers to the method of authentication you would like to use. Right now only three are supported, with the recommended being database. Note – In order for database authentication to work, a PDO connection must be supplied into the initDb function, this will support MySQLi in the near future.
 
 ####Options:
 -	‘database’ (default)
@@ -137,7 +144,8 @@ $token->setOption(‘tokenFlags’,’wWds’);
 $token->setOption(‘authType’,’cookies’);
 ```
 
-###action: Action refers to the action being authorized. This can be any string, though I recommend choosing something simple like ‘update’ or ‘removeAlert’. ######Note - This value is verified when token validation is executed and by default, if using database authentication and the auto db installer supports strings up to 45 characters. If this option is not set it will default to the string ‘request’ and can be ignored if your only concern is making sure the token was passed successfully.
+###action: 
+Action refers to the action being authorized. This can be any string, though I recommend choosing something simple like ‘update’ or ‘removeAlert’. Note - This value is verified when token validation is executed and by default, if using database authentication and the auto db installer supports strings up to 45 characters. If this option is not set it will default to the string ‘request’ and can be ignored if your only concern is making sure the token was passed successfully.
 
 ####Options:
 -	Any string (default is ‘request’)
@@ -174,7 +182,6 @@ More information on php pdo can be found at [http://php.net/manual/en/pdo.constr
  
 The database is set up to handle a token table with the following structure:
 
-|-----------|--------------|------|-----|---------|-------|
 | Field     | Type         | Null | Key | Default | Extra |
 |-----------|--------------|------|-----|---------|-------|
 | id        | INT(10)      | NO   | PRI | NULL    |AutoInc|
@@ -183,7 +190,6 @@ The database is set up to handle a token table with the following structure:
 | date      | int(64)      | NO   |     | NULL    |       |
 | expiration| int(64)      | NO   |     | NULL    |       |
 | status    | int(3)       | NO   |     | NULL    |       |
-|-----------|--------------|------|-----|---------|-------|
 
 ##Usage:
 - Coming soon -
