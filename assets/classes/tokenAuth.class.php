@@ -539,7 +539,7 @@ class tokenAuth
             foreach ($config as $key => $value) {
                 if (isset($this->$key)) {
                     // Ensure that the setting is compatable with verifySetting
-                    $this->$key = $this->verifySetting($key, $value);
+                    $this->$key = $this->verifySetting($key, $this->sanitize($value) );
                 }
             }
         }
