@@ -100,7 +100,7 @@ class tokenAuth
         $error = $this->errors[$error];
         if (isset($error)) {
             // Echo or dump error directly to screen
-            if (!$this->mode === 'development') {
+            if ($this->mode !== 'development') {
                 // Then we need to senser ourselves.
                 return FALSE;
             }
